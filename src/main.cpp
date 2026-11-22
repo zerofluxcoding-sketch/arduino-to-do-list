@@ -17,6 +17,33 @@ bool oledConnected = false;
 
 const uint8_t DEBOUNCE_MS = 50;
 
+struct TodoItem {
+  char itemName[21];
+  bool isCompleted;
+
+  void toggle() {
+    isCompleted = !isCompleted;
+  }
+};
+
+// Populating the todo list
+TodoItem item0 = {"Pray Fajr", false};
+TodoItem item1 = {"Take Walk", false};
+TodoItem item2 = {"Pray Dhuhr", false};
+TodoItem item3 = {"Take Nap", false};
+TodoItem item4 = {"Pray Asr", false};
+TodoItem item5 = {"Exercise", false};
+TodoItem item6 = {"Pray Magrib", false};
+TodoItem item7 = {"Do Homework", false};
+TodoItem item8 = {"Pray Isha", false};
+TodoItem item9 = {"Read Quran", false};
+
+const uint8_t TODO_LIST_LENGTH = 10;
+TodoItem todoList[TODO_LIST_LENGTH] = {
+  item0, item1, item2, item3, item4,
+  item5, item6, item7, item8, item9
+};
+
 void initOled();
 void updateDisplay();
 
