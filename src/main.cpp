@@ -8,6 +8,8 @@ const uint8_t SCREEN_WIDTH = 128;
 const uint8_t SCREEN_HEIGHT = 64;
 const int8_t OLED_RESET = -1;
 
+const uint8_t HEADER_HEIGHT = 16;
+
 const uint8_t BTN_AMOUNT = 3;
 const int8_t BTN_PINS[BTN_AMOUNT] = { 6, 5, 4 };
 
@@ -18,7 +20,7 @@ bool oledConnected = false;
 const uint8_t DEBOUNCE_MS = 50;
 
 struct TodoItem {
-  char itemName[21];
+  char itemName[12];
   bool isCompleted;
 
   void toggle() {
@@ -27,25 +29,25 @@ struct TodoItem {
 };
 
 // Populating the todo list
-TodoItem item0 = {"Pray Fajr", false};
-TodoItem item1 = {"Take Walk", false};
-TodoItem item2 = {"Pray Dhuhr", false};
-TodoItem item3 = {"Take Nap", false};
-TodoItem item4 = {"Pray Asr", false};
-TodoItem item5 = {"Exercise", false};
-TodoItem item6 = {"Pray Magrib", false};
-TodoItem item7 = {"Do Homework", false};
-TodoItem item8 = {"Pray Isha", false};
-TodoItem item9 = {"Read Quran", false};
-
 const uint8_t TODO_LIST_LENGTH = 10;
 TodoItem todoList[TODO_LIST_LENGTH] = {
-  item0, item1, item2, item3, item4,
-  item5, item6, item7, item8, item9
+  {"Pray Fajr", false},
+  {"Take Walk", false},
+  {"Pray Dhuhr", false},
+  {"Take Nap", false},
+  {"Pray Asr", false},
+  {"Exercise", false},
+  {"Pray Magrib", false},
+  {"Do Homework", false},
+  {"Pray Isha", false},
+  {"Read Quran", false}
 };
+uint8_t todoListIndex = 0;
+const uint8_t MAX_ITEM_DISPLAY = 3;
 
 void initOled();
-void updateDisplay();
+void handleButtonInputs();
+void renderDisplay();
 
 void setup() {
   Wire.begin();
@@ -59,11 +61,8 @@ void setup() {
 }
 
 void loop() {
-  for (uint8_t i = 0; i < BTN_AMOUNT; i++) {
-    if (digitalRead(BTN_PINS[i]) == LOW) {
-      updateDisplay();
-    }
-  }
+  handleButtonInputs();
+  renderDisplay();
 
   delay(DEBOUNCE_MS);
 }
@@ -72,21 +71,35 @@ void initOled() {
   if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDR)) {
     oledConnected = true;
     display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(3);
-    updateDisplay();
+    display.setTextSize(1);
+    renderDisplay();
   }
 }
 
-void updateDisplay() {
+void handleButtonInputs() {
+  if (digitalRead(BTN_PINS[0]) == LOW) {
+    if (todoListIndex > 0) todoListIndex--;
+  } else if (digitalRead(BTN_PINS[1]) == LOW) {
+    // Toggle: Checked on/off
+  } else if (digitalRead(BTN_PINS[2]) == LOW) {
+    if (todoListIndex < TODO_LIST_LENGTH - MAX_ITEM_DISPLAY) todoListIndex++;
+  }
+}
+
+void renderDisplay() {
   if (!oledConnected) return;
 
   display.clearDisplay();
+
   display.setCursor(0, 0);
-  
-  for (uint8_t i = 0; i < BTN_AMOUNT; i++) {
-    if (digitalRead(BTN_PINS[i]) == LOW) {
-      display.println(BTN_PINS[i]);
-    }
+  display.println(F("To-Do List"));
+
+  for (uint8_t i = 0; i < MAX_ITEM_DISPLAY; i++) {
+    TodoItem item = todoList[todoListIndex + i];
+
+    uint8_t yOffset = HEADER_HEIGHT + 10 * i;
+    display.setCursor(0, yOffset);
+    display.println(item.itemName);
   }
 
   display.display();
