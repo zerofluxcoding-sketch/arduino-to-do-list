@@ -8,6 +8,8 @@ const uint8_t SCREEN_WIDTH = 128;
 const uint8_t SCREEN_HEIGHT = 64;
 const int8_t OLED_RESET = -1;
 
+const uint8_t TEXT_WIDTH = 6;
+const uint8_t TEXT_HEIGHT = 8;
 const uint8_t HEADER_HEIGHT = 16;
 
 const uint8_t BTN_AMOUNT = 3;
@@ -17,7 +19,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 bool oledConnected = false;
 
-const uint8_t DEBOUNCE_MS = 50;
+const uint8_t DEBOUNCE_MS = 100;
 
 struct TodoItem {
   char itemName[12];
@@ -80,9 +82,10 @@ void handleButtonInputs() {
   if (digitalRead(BTN_PINS[0]) == LOW) {
     if (todoListIndex > 0) todoListIndex--;
   } else if (digitalRead(BTN_PINS[1]) == LOW) {
-    // Toggle: Checked on/off
+    TodoItem &item = todoList[todoListIndex];
+    item.toggle();
   } else if (digitalRead(BTN_PINS[2]) == LOW) {
-    if (todoListIndex < TODO_LIST_LENGTH - MAX_ITEM_DISPLAY) todoListIndex++;
+    if (todoListIndex < TODO_LIST_LENGTH - 1) todoListIndex++;
   }
 }
 
@@ -94,12 +97,27 @@ void renderDisplay() {
   display.setCursor(0, 0);
   display.println(F("To-Do List"));
 
+  int8_t targetIndex = todoListIndex - 1;
+  if (targetIndex < MAX_ITEM_DISPLAY - 2) {
+    targetIndex = 0;
+  } else if (targetIndex > TODO_LIST_LENGTH - MAX_ITEM_DISPLAY) {
+    targetIndex = 7;
+  }
+
   for (uint8_t i = 0; i < MAX_ITEM_DISPLAY; i++) {
-    TodoItem item = todoList[todoListIndex + i];
+    TodoItem item = todoList[targetIndex + i];
 
     uint8_t yOffset = HEADER_HEIGHT + 10 * i;
     display.setCursor(0, yOffset);
     display.println(item.itemName);
+
+    if (targetIndex + i == todoListIndex) {
+      display.drawRect(0, yOffset, SCREEN_WIDTH, 10, SSD1306_WHITE);
+    }
+
+    if (item.isCompleted) {
+      display.drawFastHLine(0, yOffset + TEXT_HEIGHT / 2, SCREEN_WIDTH, WHITE);
+    }
   }
 
   display.display();
