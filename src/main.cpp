@@ -23,7 +23,7 @@ bool isDisplayReady = false;
 bool needsRedraw = false;
 
 uint32_t lastInputCheckMs = 0;
-const uint8_t INPUT_INTERVAL_MS = 100;
+const uint8_t INPUT_INTERVAL_MS = 133;
 
 struct TodoItem {
   char title[12];
