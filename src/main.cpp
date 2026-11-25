@@ -3,36 +3,36 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-const uint8_t SCREEN_ADDR = 0x3C;
-const uint8_t SCREEN_WIDTH = 128;
-const uint8_t SCREEN_HEIGHT = 64;
-const int8_t OLED_RESET = -1;
+const uint8_t OLED_I2C_ADDR = 0x3C;
+const uint8_t DISPLAY_WIDTH = 128;
+const uint8_t DISPLAY_HEIGHT = 64;
+const int8_t DISPLAY_RESET_PIN = -1;
 
-const uint8_t TEXT_WIDTH = 6;
-const uint8_t TEXT_HEIGHT = 8;
-const uint8_t HEADER_HEIGHT = 16;
+const uint8_t CHAR_WIDTH = 6;
+const uint8_t CHAR_HEIGHT = 8;
+const uint8_t TITLE_BAR_HEIGHT = 16;
 
-const uint8_t BTN_AMOUNT = 3;
-const int8_t BTN_PINS[BTN_AMOUNT] = { 6, 5, 4 };
+const uint8_t BUTTON_COUNT = 3;
+const int8_t BUTTON_PINS[BUTTON_COUNT] = { 6, 5, 4 };
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, DISPLAY_RESET_PIN);
 
-bool oledConnected = false;
+bool isDisplayReady = false;
 
-const uint8_t DEBOUNCE_MS = 100;
+const uint8_t LOOP_DELAY_MS = 100;
 
 struct TodoItem {
-  char itemName[12];
-  bool isCompleted;
+  char title[12];
+  bool completed;
 
   void toggle() {
-    isCompleted = !isCompleted;
+    completed = !completed;
   }
 };
 
 // Populating the todo list
-const uint8_t TODO_LIST_LENGTH = 10;
-TodoItem todoList[TODO_LIST_LENGTH] = {
+const uint8_t TASK_COUNT = 10;
+TodoItem tasks[TASK_COUNT] = {
   {"Pray Fajr", false},
   {"Take Walk", false},
   {"Pray Dhuhr", false},
@@ -44,21 +44,21 @@ TodoItem todoList[TODO_LIST_LENGTH] = {
   {"Pray Isha", false},
   {"Read Quran", false}
 };
-uint8_t todoListIndex = 0;
-const uint8_t MAX_ITEM_DISPLAY = 3;
+uint8_t selectedTaskIndex = 0;
+const uint8_t VISIBLE_TASK_COUNT = 3;
 
 void initOled();
 void handleButtonInputs();
 void renderDisplay();
-void printCenteredText(const __FlashStringHelper* flashText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically);
-void printCenteredText(char* ramText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically);
+void printCenteredText(const __FlashStringHelper* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY);
+void printCenteredText(char* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY);
 
 void setup() {
   Wire.begin();
   Wire.setWireTimeout(3000, true);
 
-  for (uint8_t i = 0; i < BTN_AMOUNT; i++) {
-    pinMode(BTN_PINS[i], INPUT_PULLUP);
+  for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+    pinMode(BUTTON_PINS[i], INPUT_PULLUP);
   }
 
   initOled();
@@ -68,12 +68,12 @@ void loop() {
   handleButtonInputs();
   renderDisplay();
 
-  delay(DEBOUNCE_MS);
+  delay(LOOP_DELAY_MS);
 }
 
 void initOled() {
-  if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDR)) {
-    oledConnected = true;
+  if (display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
+    isDisplayReady = true;
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     renderDisplay();
@@ -81,80 +81,80 @@ void initOled() {
 }
 
 void handleButtonInputs() {
-  if (digitalRead(BTN_PINS[0]) == LOW) {
-    if (todoListIndex > 0) todoListIndex--;
-  } else if (digitalRead(BTN_PINS[1]) == LOW) {
-    TodoItem &item = todoList[todoListIndex];
+  if (digitalRead(BUTTON_PINS[0]) == LOW) {
+    if (selectedTaskIndex > 0) selectedTaskIndex--;
+  } else if (digitalRead(BUTTON_PINS[1]) == LOW) {
+    TodoItem &item = tasks[selectedTaskIndex];
     item.toggle();
-  } else if (digitalRead(BTN_PINS[2]) == LOW) {
-    if (todoListIndex < TODO_LIST_LENGTH - 1) todoListIndex++;
+  } else if (digitalRead(BUTTON_PINS[2]) == LOW) {
+    if (selectedTaskIndex < TASK_COUNT - 1) selectedTaskIndex++;
   }
 }
 
 void renderDisplay() {
-  if (!oledConnected) return;
+  if (!isDisplayReady) return;
 
   display.clearDisplay();
 
   display.setCursor(0, 0);
-  printCenteredText(F("To-Do List"), 1, SCREEN_WIDTH, HEADER_HEIGHT, true, true);
+  printCenteredText(F("To-Do List"), 1, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, true, true);
 
-  int8_t targetIndex = todoListIndex - 1;
-  if (targetIndex < MAX_ITEM_DISPLAY - 2) {
-    targetIndex = 0;
-  } else if (targetIndex > TODO_LIST_LENGTH - MAX_ITEM_DISPLAY) {
-    targetIndex = 7;
+  int8_t scrollStartIndex = selectedTaskIndex - 1;
+  if (scrollStartIndex < VISIBLE_TASK_COUNT - 2) {
+    scrollStartIndex = 0;
+  } else if (scrollStartIndex > TASK_COUNT - VISIBLE_TASK_COUNT) {
+    scrollStartIndex = 7;
   }
 
-  for (uint8_t i = 0; i < MAX_ITEM_DISPLAY; i++) {
-    TodoItem item = todoList[targetIndex + i];
+  for (uint8_t i = 0; i < VISIBLE_TASK_COUNT; i++) {
+    TodoItem item = tasks[scrollStartIndex + i];
 
-    uint8_t yOffset = HEADER_HEIGHT + 10 * i;
-    printCenteredText(item.itemName, 1, SCREEN_WIDTH, yOffset, true, false);
+    uint8_t rowTopY = TITLE_BAR_HEIGHT + 10 * i;
+    printCenteredText(item.title, 1, DISPLAY_WIDTH, rowTopY, true, false);
 
-    if (targetIndex + i == todoListIndex) {
-      display.drawRect(0, yOffset, SCREEN_WIDTH, 10, SSD1306_WHITE);
+    if (scrollStartIndex + i == selectedTaskIndex) {
+      display.drawRect(0, rowTopY, DISPLAY_WIDTH, 10, SSD1306_WHITE);
     }
 
-    if (item.isCompleted) {
-      display.drawFastHLine(0, yOffset + TEXT_HEIGHT / 2, SCREEN_WIDTH, WHITE);
+    if (item.completed) {
+      display.drawFastHLine(0, rowTopY + CHAR_HEIGHT / 2, DISPLAY_WIDTH, WHITE);
     }
   }
 
   display.display();
 }
 
-void printCenteredText(const __FlashStringHelper* flashText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically) {
-  uint8_t textLength = strlen_P((PGM_P)flashText);
-  uint8_t heightPaddingUp, widthPaddingLeft;
+void printCenteredText(const __FlashStringHelper* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY) {
+  uint8_t textLength = strlen_P((PGM_P)label);
+  uint8_t cursorY, cursorX;
 
-  if (centerHorizontally) {
-    widthPaddingLeft = (relativeWidth - (TEXT_WIDTH * textSize * textLength)) / 2;
-  } else if (!centerHorizontally) {
-    widthPaddingLeft = relativeWidth;
+  if (alignCenterX) {
+    cursorX = (areaWidth - (CHAR_WIDTH * textSize * textLength)) / 2;
+  } else if (!alignCenterX) {
+    cursorX = areaWidth;
   }
 
-  if (centerVertically) {
-    heightPaddingUp = (relativeHeight - (TEXT_HEIGHT * textSize)) / 2;
-  } else if (!centerHorizontally) {
-    heightPaddingUp = relativeHeight;
+  if (alignCenterY) {
+    cursorY = (boxTopY - (CHAR_HEIGHT * textSize)) / 2;
+  } else if (!alignCenterX) {
+    cursorY = boxTopY;
   }
 
   display.setTextSize(textSize);
-  display.setCursor(widthPaddingLeft, heightPaddingUp);
-  display.println(flashText);
+  display.setCursor(cursorX, cursorY);
+  display.println(label);
 }
 
-void printCenteredText(char* ramText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically) {
-  uint8_t textLength = strlen(ramText);
+void printCenteredText(char* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY) {
+  uint8_t textLength = strlen(label);
 
-  uint8_t widthPaddingLeft = centerHorizontally ?
-    (relativeWidth - (TEXT_WIDTH * textSize * textLength)) / 2 : relativeWidth;
+  uint8_t cursorX = alignCenterX ?
+    (areaWidth - (CHAR_WIDTH * textSize * textLength)) / 2 : areaWidth;
 
-   uint8_t heightPaddingUp = centerVertically ?
-    (relativeHeight - (TEXT_HEIGHT * textSize)) / 2 : relativeHeight;
+  uint8_t cursorY = alignCenterY ?
+    (boxTopY - (CHAR_HEIGHT * textSize)) / 2 : boxTopY;
 
   display.setTextSize(textSize);
-  display.setCursor(widthPaddingLeft, heightPaddingUp);
-  display.println(ramText);
+  display.setCursor(cursorX, cursorY);
+  display.println(label);
 }
