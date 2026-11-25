@@ -11,21 +11,18 @@ const int8_t DISPLAY_RESET_PIN = -1;
 const uint8_t CHAR_WIDTH = 6;
 const uint8_t CHAR_HEIGHT = 8;
 const uint8_t TITLE_BAR_HEIGHT = 16;
-const uint8_t SUMMERY_BAR_WIDTH = 32;
+const uint8_t SUMMARY_BAR_WIDTH = 32;
 const uint8_t MARGIN = 4;
 
 const uint8_t BUTTON_COUNT = 3;
 const int8_t BUTTON_PINS[BUTTON_COUNT] = { 6, 5, 4 };
 
-Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, DISPLAY_RESET_PIN);
-
-bool isDisplayReady = false;
-bool needsRedraw = false;
-
-uint32_t lastInputCheckMs = 0;
+const uint32_t WIRE_TIMEOUT_MS = 3000;
 const uint8_t INPUT_INTERVAL_MS = 133;
 
-const uint8_t TITLE_TEXT_LENGTH = 12;
+const uint8_t TITLE_TEXT_LENGTH = 16;
+const uint8_t TASK_COUNT = 10;
+const uint8_t VISIBLE_TASK_COUNT = 3;
 
 struct TodoItem {
   char title[TITLE_TEXT_LENGTH];
@@ -36,40 +33,45 @@ struct TodoItem {
   }
 };
 
-uint8_t taskCompletedCount = 0;
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, DISPLAY_RESET_PIN);
 
-// Populating the todo list
-const uint8_t TASK_COUNT = 10;
 TodoItem tasks[TASK_COUNT] = {
-  {"Pray Fajr", false},
-  {"Take Walk", false},
-  {"Pray Dhuhr", false},
-  {"Take Nap", false},
-  {"Pray Asr", false},
-  {"Exercise", false},
-  {"Pray Magrib", false},
-  {"Do Homework", false},
-  {"Pray Isha", false},
-  {"Read Quran", false}
+  { "Pray Fajr", false },
+  { "Take Walk", false },
+  { "Pray Dhuhr", false },
+  { "Take Nap", false },
+  { "Pray Asr", false },
+  { "Exercise", false },
+  { "Pray Magrib", false },
+  { "Do Homework", false },
+  { "Pray Isha", false },
+  { "Read Quran", false }
 };
-uint8_t selectedTaskIndex = 0;
-const uint8_t VISIBLE_TASK_COUNT = 3;
 
+bool isDisplayReady = false;
+bool needsRedraw = false;
+uint32_t lastInputCheckMs = 0;
+uint8_t taskCompletedCount = 0;
+uint8_t selectedTaskIndex = 0;
+
+void initButtons();
 void initOled();
 void handleButtonInputs();
-void renderDisplay();
 void updateTaskCompletedCount();
-void printText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
-void printText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
+uint8_t getScrollStartIndex();
+void renderDisplay();
+void renderHeader();
+void renderTaskList(uint8_t scrollStartIndex);
+void renderSummaryBar();
+void drawCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t boxX, uint8_t boxY, uint8_t boxWidth, uint8_t boxHeight);
+void drawCenteredText(const char* text, uint8_t textSize, uint8_t boxX, uint8_t boxY, uint8_t boxWidth, uint8_t boxHeight);
+void drawTextAt(const char* text, uint8_t textSize, uint8_t x, uint8_t y);
 
 void setup() {
   Wire.begin();
-  Wire.setWireTimeout(3000, true);
+  Wire.setWireTimeout(WIRE_TIMEOUT_MS, true);
 
-  for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-    pinMode(BUTTON_PINS[i], INPUT_PULLUP);
-  }
-
+  initButtons();
   initOled();
 }
 
@@ -87,6 +89,12 @@ void loop() {
   }
 }
 
+void initButtons() {
+  for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+    pinMode(BUTTON_PINS[i], INPUT_PULLUP);
+  }
+}
+
 void initOled() {
   if (display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
     isDisplayReady = true;
@@ -98,96 +106,137 @@ void initOled() {
 
 void handleButtonInputs() {
   if (digitalRead(BUTTON_PINS[0]) == LOW) {
-    if (selectedTaskIndex > 0) selectedTaskIndex--;
+    if (selectedTaskIndex > 0) {
+      selectedTaskIndex--;
+    }
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[1]) == LOW) {
-    TodoItem &task = tasks[selectedTaskIndex];
-    task.toggle();
+    tasks[selectedTaskIndex].toggle();
     updateTaskCompletedCount();
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[2]) == LOW) {
-    if (selectedTaskIndex < TASK_COUNT - 1) selectedTaskIndex++;
+    if (selectedTaskIndex < TASK_COUNT - 1) {
+      selectedTaskIndex++;
+    }
     needsRedraw = true;
   }
 }
 
+void updateTaskCompletedCount() {
+  uint8_t count = 0;
+
+  for (uint8_t i = 0; i < TASK_COUNT; i++) {
+    if (tasks[i].completed) {
+      count++;
+    }
+  }
+
+  taskCompletedCount = count;
+}
+
+uint8_t getScrollStartIndex() {
+  int8_t startIndex = static_cast<int8_t>(selectedTaskIndex) - 1;
+  int8_t maxStartIndex = static_cast<int8_t>(TASK_COUNT - VISIBLE_TASK_COUNT);
+
+  if (startIndex < 0) {
+    return 0;
+  }
+
+  if (startIndex > maxStartIndex) {
+    return static_cast<uint8_t>(maxStartIndex);
+  }
+
+  return static_cast<uint8_t>(startIndex);
+}
+
 void renderDisplay() {
-  if (!isDisplayReady) return;
+  if (!isDisplayReady) {
+    return;
+  }
 
   display.clearDisplay();
 
-  display.setCursor(0, 0);
-  printText(F("To-Do List"), 1, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, true, true);
-
-  display.drawRect(0, 0, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, SSD1306_WHITE);
-  display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
-  display.drawFastVLine(DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - 1, TITLE_BAR_HEIGHT, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
-  display.drawFastVLine(DISPLAY_WIDTH - SUMMERY_BAR_WIDTH, TITLE_BAR_HEIGHT, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
-
-  int8_t scrollStartIndex = selectedTaskIndex - 1;
-  if (scrollStartIndex < VISIBLE_TASK_COUNT - 2) {
-    scrollStartIndex = 0;
-  } else if (scrollStartIndex > TASK_COUNT - VISIBLE_TASK_COUNT) {
-    scrollStartIndex = 7;
-  }
-
-  for (uint8_t i = 0; i < VISIBLE_TASK_COUNT; i++) {
-    TodoItem task = tasks[scrollStartIndex + i];
-
-    uint8_t rowTopY = TITLE_BAR_HEIGHT + MARGIN + (CHAR_HEIGHT * 2 * i);
-    char text[TITLE_TEXT_LENGTH + 3];
-    snprintf(text, TITLE_TEXT_LENGTH + 3, "%d. %s", scrollStartIndex + i + 1, task.title);
-    printText(text, 1, MARGIN * 2, rowTopY, false, false);
-
-    if (scrollStartIndex + i == selectedTaskIndex) {
-      display.drawRect(MARGIN, rowTopY - 1, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), 10, SSD1306_WHITE);
-    }
-
-    if (task.completed) {
-      display.drawFastHLine(MARGIN, rowTopY + CHAR_HEIGHT / 2, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), SSD1306_WHITE);
-    }
-
-    char taskCompletionRatio[6];
-    snprintf(taskCompletionRatio, 6, "%d/10", taskCompletedCount);
-    printText(taskCompletionRatio, 1, (2 * DISPLAY_WIDTH) - SUMMERY_BAR_WIDTH, DISPLAY_HEIGHT + TITLE_BAR_HEIGHT, true, true);
-  }
+  renderHeader();
+  renderTaskList(getScrollStartIndex());
+  renderSummaryBar();
 
   display.display();
 }
 
-void updateTaskCompletedCount() {
-  uint8_t newCount = 0;
-  for (uint8_t i = 0; i < TASK_COUNT; i++) {
-    TodoItem task = tasks[i];
-    if (task.completed) newCount++;
+void renderHeader() {
+  display.drawRect(0, 0, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, SSD1306_WHITE);
+  drawCenteredText(F("To-Do List"), 1, 0, 0, DISPLAY_WIDTH, TITLE_BAR_HEIGHT);
+}
+
+void renderTaskList(uint8_t scrollStartIndex) {
+  const uint8_t contentHeight = DISPLAY_HEIGHT - TITLE_BAR_HEIGHT;
+  const uint8_t taskAreaWidth = DISPLAY_WIDTH - SUMMARY_BAR_WIDTH;
+  const uint8_t rowHighlightWidth = taskAreaWidth - (MARGIN * 2);
+
+  display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, contentHeight, SSD1306_WHITE);
+
+  for (uint8_t i = 0; i < VISIBLE_TASK_COUNT; i++) {
+    uint8_t taskIndex = scrollStartIndex + i;
+    if (taskIndex >= TASK_COUNT) {
+      break;
+    }
+
+    const TodoItem& task = tasks[taskIndex];
+    uint8_t rowTopY = TITLE_BAR_HEIGHT + MARGIN + (CHAR_HEIGHT * i * 2);
+
+    char lineBuffer[TITLE_TEXT_LENGTH + 6];
+    snprintf(lineBuffer, sizeof(lineBuffer), "%u. %s", taskIndex + 1, task.title);
+    drawTextAt(lineBuffer, 1, MARGIN * 2, rowTopY);
+
+    if (taskIndex == selectedTaskIndex) {
+      display.drawRect(MARGIN, rowTopY - 1, rowHighlightWidth, CHAR_HEIGHT + 2, SSD1306_WHITE);
+    }
+
+    if (task.completed) {
+      display.drawFastHLine(MARGIN, rowTopY + (CHAR_HEIGHT / 2), rowHighlightWidth, SSD1306_WHITE);
+    }
   }
-  taskCompletedCount = newCount;
 }
 
-void printText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
-  uint8_t textLength = strlen_P((PGM_P)text);
+void renderSummaryBar() {
+  const uint8_t barX = DISPLAY_WIDTH - SUMMARY_BAR_WIDTH - 1;
+  const uint8_t barHeight = DISPLAY_HEIGHT - TITLE_BAR_HEIGHT;
 
-  uint8_t cursorX = alignCenterX ?
-    (width - (CHAR_WIDTH * textSize * textLength)) / 2 : width;
+  display.drawRect(barX, TITLE_BAR_HEIGHT, 2, barHeight, SSD1306_WHITE);
 
-  uint8_t cursorY = alignCenterY ?
-    (height - (CHAR_HEIGHT * textSize)) / 2 : height;
+  char ratioBuffer[10];
+  snprintf(ratioBuffer, sizeof(ratioBuffer), "%u/%u", taskCompletedCount, TASK_COUNT);
+  drawCenteredText(ratioBuffer, 1, barX + 2, TITLE_BAR_HEIGHT, SUMMARY_BAR_WIDTH - 1, barHeight);
+}
+
+void drawCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t boxX, uint8_t boxY, uint8_t boxWidth, uint8_t boxHeight) {
+  uint8_t textLength = strlen_P(reinterpret_cast<PGM_P>(text));
+  uint8_t textPixelWidth = CHAR_WIDTH * textSize * textLength;
+  uint8_t textPixelHeight = CHAR_HEIGHT * textSize;
+
+  uint8_t cursorX = boxX + ((boxWidth > textPixelWidth) ? (boxWidth - textPixelWidth) / 2 : 0);
+  uint8_t cursorY = boxY + ((boxHeight > textPixelHeight) ? (boxHeight - textPixelHeight) / 2 : 0);
 
   display.setTextSize(textSize);
   display.setCursor(cursorX, cursorY);
-  display.println(text);
+  display.print(text);
 }
 
-void printText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
+void drawCenteredText(const char* text, uint8_t textSize, uint8_t boxX, uint8_t boxY, uint8_t boxWidth, uint8_t boxHeight) {
   uint8_t textLength = strlen(text);
+  uint8_t textPixelWidth = CHAR_WIDTH * textSize * textLength;
+  uint8_t textPixelHeight = CHAR_HEIGHT * textSize;
 
-  uint8_t cursorX = alignCenterX ?
-    (width - (CHAR_WIDTH * textSize * textLength)) / 2 : width;
-
-  uint8_t cursorY = alignCenterY ?
-    (height - (CHAR_HEIGHT * textSize)) / 2 : height;
+  uint8_t cursorX = boxX + ((boxWidth > textPixelWidth) ? (boxWidth - textPixelWidth) / 2 : 0);
+  uint8_t cursorY = boxY + ((boxHeight > textPixelHeight) ? (boxHeight - textPixelHeight) / 2 : 0);
 
   display.setTextSize(textSize);
   display.setCursor(cursorX, cursorY);
-  display.println(text);
+  display.print(text);
+}
+
+void drawTextAt(const char* text, uint8_t textSize, uint8_t x, uint8_t y) {
+  display.setTextSize(textSize);
+  display.setCursor(x, y);
+  display.print(text);
 }
