@@ -11,6 +11,8 @@ const int8_t DISPLAY_RESET_PIN = -1;
 const uint8_t CHAR_WIDTH = 6;
 const uint8_t CHAR_HEIGHT = 8;
 const uint8_t TITLE_BAR_HEIGHT = 16;
+const uint8_t SUMMERY_BAR_WIDTH = 32;
+const uint8_t MARGIN = 4;
 
 const uint8_t BUTTON_COUNT = 3;
 const int8_t BUTTON_PINS[BUTTON_COUNT] = { 6, 5, 4 };
@@ -32,6 +34,8 @@ struct TodoItem {
   }
 };
 
+uint8_t taskCompletedCount = 0;
+
 // Populating the todo list
 const uint8_t TASK_COUNT = 10;
 TodoItem tasks[TASK_COUNT] = {
@@ -52,6 +56,7 @@ const uint8_t VISIBLE_TASK_COUNT = 3;
 void initOled();
 void handleButtonInputs();
 void renderDisplay();
+void updateTaskCompletedCount();
 void printCenteredText(const __FlashStringHelper* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY);
 void printCenteredText(char* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY);
 
@@ -68,12 +73,13 @@ void setup() {
 
 void loop() {
   uint32_t nowMs = millis();
+
   if (nowMs - lastInputCheckMs >= INPUT_INTERVAL_MS) {
     lastInputCheckMs = nowMs;
     handleButtonInputs();
   }
 
-  if (needsRedraw) {
+  if (isDisplayReady && needsRedraw) {
     renderDisplay();
     needsRedraw = false;
   }
@@ -93,8 +99,9 @@ void handleButtonInputs() {
     if (selectedTaskIndex > 0) selectedTaskIndex--;
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[1]) == LOW) {
-    TodoItem &item = tasks[selectedTaskIndex];
-    item.toggle();
+    TodoItem &task = tasks[selectedTaskIndex];
+    task.toggle();
+    updateTaskCompletedCount();
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[2]) == LOW) {
     if (selectedTaskIndex < TASK_COUNT - 1) selectedTaskIndex++;
@@ -110,6 +117,12 @@ void renderDisplay() {
   display.setCursor(0, 0);
   printCenteredText(F("To-Do List"), 1, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, true, true);
 
+  display.drawRect(0, 0, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, SSD1306_WHITE);
+  display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
+  display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
+  display.drawFastVLine(DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - 1, TITLE_BAR_HEIGHT, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
+  display.drawFastVLine(DISPLAY_WIDTH - SUMMERY_BAR_WIDTH, TITLE_BAR_HEIGHT, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
+
   int8_t scrollStartIndex = selectedTaskIndex - 1;
   if (scrollStartIndex < VISIBLE_TASK_COUNT - 2) {
     scrollStartIndex = 0;
@@ -118,21 +131,34 @@ void renderDisplay() {
   }
 
   for (uint8_t i = 0; i < VISIBLE_TASK_COUNT; i++) {
-    TodoItem item = tasks[scrollStartIndex + i];
+    TodoItem task = tasks[scrollStartIndex + i];
 
-    uint8_t rowTopY = TITLE_BAR_HEIGHT + 10 * i;
-    printCenteredText(item.title, 1, DISPLAY_WIDTH, rowTopY, true, false);
+    uint8_t rowTopY = TITLE_BAR_HEIGHT + MARGIN + (10 * i);
+    printCenteredText(task.title, 1, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), rowTopY, true, false);
 
     if (scrollStartIndex + i == selectedTaskIndex) {
-      display.drawRect(0, rowTopY, DISPLAY_WIDTH, 10, SSD1306_WHITE);
+      display.drawRect(MARGIN, rowTopY - 1, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), 10, SSD1306_WHITE);
     }
 
-    if (item.completed) {
-      display.drawFastHLine(0, rowTopY + CHAR_HEIGHT / 2, DISPLAY_WIDTH, WHITE);
+    if (task.completed) {
+      display.drawFastHLine(MARGIN, rowTopY + CHAR_HEIGHT / 2, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), SSD1306_WHITE);
     }
+
+    char taskCompletionRatio[6];
+    snprintf(taskCompletionRatio, 6, "%d/10", taskCompletedCount);
+    printCenteredText(taskCompletionRatio, 1, (2 * DISPLAY_WIDTH) - SUMMERY_BAR_WIDTH, DISPLAY_HEIGHT + TITLE_BAR_HEIGHT, true, true);
   }
 
   display.display();
+}
+
+void updateTaskCompletedCount() {
+  uint8_t newCount = 0;
+  for (uint8_t i = 0; i < TASK_COUNT; i++) {
+    TodoItem task = tasks[i];
+    if (task.completed) newCount++;
+  }
+  taskCompletedCount = newCount;
 }
 
 void printCenteredText(const __FlashStringHelper* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY) {
