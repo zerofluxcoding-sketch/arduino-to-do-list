@@ -25,8 +25,10 @@ bool needsRedraw = false;
 uint32_t lastInputCheckMs = 0;
 const uint8_t INPUT_INTERVAL_MS = 133;
 
+const uint8_t TITLE_TEXT_LENGTH = 12;
+
 struct TodoItem {
-  char title[12];
+  char title[TITLE_TEXT_LENGTH];
   bool completed;
 
   void toggle() {
@@ -57,8 +59,8 @@ void initOled();
 void handleButtonInputs();
 void renderDisplay();
 void updateTaskCompletedCount();
-void printCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
-void printCenteredText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
+void printText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
+void printText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
 
 void setup() {
   Wire.begin();
@@ -115,7 +117,7 @@ void renderDisplay() {
   display.clearDisplay();
 
   display.setCursor(0, 0);
-  printCenteredText(F("To-Do List"), 1, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, true, true);
+  printText(F("To-Do List"), 1, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, true, true);
 
   display.drawRect(0, 0, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, SSD1306_WHITE);
   display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
@@ -132,8 +134,10 @@ void renderDisplay() {
   for (uint8_t i = 0; i < VISIBLE_TASK_COUNT; i++) {
     TodoItem task = tasks[scrollStartIndex + i];
 
-    uint8_t rowTopY = TITLE_BAR_HEIGHT + MARGIN + (10 * i);
-    printCenteredText(task.title, 1, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), rowTopY, true, false);
+    uint8_t rowTopY = TITLE_BAR_HEIGHT + MARGIN + (CHAR_HEIGHT * 2 * i);
+    char text[TITLE_TEXT_LENGTH + 3];
+    snprintf(text, TITLE_TEXT_LENGTH + 3, "%d. %s", scrollStartIndex + i + 1, task.title);
+    printText(text, 1, MARGIN * 2, rowTopY, false, false);
 
     if (scrollStartIndex + i == selectedTaskIndex) {
       display.drawRect(MARGIN, rowTopY - 1, DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - (2 * MARGIN), 10, SSD1306_WHITE);
@@ -145,7 +149,7 @@ void renderDisplay() {
 
     char taskCompletionRatio[6];
     snprintf(taskCompletionRatio, 6, "%d/10", taskCompletedCount);
-    printCenteredText(taskCompletionRatio, 1, (2 * DISPLAY_WIDTH) - SUMMERY_BAR_WIDTH, DISPLAY_HEIGHT + TITLE_BAR_HEIGHT, true, true);
+    printText(taskCompletionRatio, 1, (2 * DISPLAY_WIDTH) - SUMMERY_BAR_WIDTH, DISPLAY_HEIGHT + TITLE_BAR_HEIGHT, true, true);
   }
 
   display.display();
@@ -160,7 +164,7 @@ void updateTaskCompletedCount() {
   taskCompletedCount = newCount;
 }
 
-void printCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
+void printText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
   uint8_t textLength = strlen_P((PGM_P)text);
 
   uint8_t cursorX = alignCenterX ?
@@ -174,7 +178,7 @@ void printCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_
   display.println(text);
 }
 
-void printCenteredText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
+void printText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
   uint8_t textLength = strlen(text);
 
   uint8_t cursorX = alignCenterX ?
