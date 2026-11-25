@@ -1,7 +1,11 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <EEPROM.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+
+const uint8_t EEPROM_MAGIC_KEY = 0x01;
+const uint16_t EEPROM_START_ADDR = 0;
 
 const uint8_t OLED_I2C_ADDR = 0x3C;
 const uint8_t DISPLAY_WIDTH = 128;
@@ -24,7 +28,7 @@ const uint8_t TITLE_TEXT_LENGTH = 16;
 const uint8_t TASK_COUNT = 10;
 const uint8_t VISIBLE_TASK_COUNT = 3;
 
-struct TodoItem {
+struct Task {
   char title[TITLE_TEXT_LENGTH];
   bool completed;
 
@@ -33,20 +37,14 @@ struct TodoItem {
   }
 };
 
+struct Data {
+  uint8_t magicKey;
+  Task tasks[TASK_COUNT];
+};
+
 Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, DISPLAY_RESET_PIN);
 
-TodoItem tasks[TASK_COUNT] = {
-  { "Pray Fajr", false },
-  { "Take Walk", false },
-  { "Pray Dhuhr", false },
-  { "Take Nap", false },
-  { "Pray Asr", false },
-  { "Exercise", false },
-  { "Pray Magrib", false },
-  { "Do Homework", false },
-  { "Pray Isha", false },
-  { "Read Quran", false }
-};
+Data taskData;
 
 bool isDisplayReady = false;
 bool needsRedraw = false;
@@ -56,6 +54,9 @@ uint8_t selectedTaskIndex = 0;
 
 void initButtons();
 void initOled();
+void loadTaskDataFromEEPROM();
+void saveTaskDataToEEPROM();
+void setDefaultTask(uint8_t index, const char* title, bool completed);
 void handleButtonInputs();
 void updateTaskCompletedCount();
 uint8_t getScrollStartIndex();
@@ -70,6 +71,9 @@ void drawTextAt(const char* text, uint8_t textSize, uint8_t x, uint8_t y);
 void setup() {
   Wire.begin();
   Wire.setWireTimeout(WIRE_TIMEOUT_MS, true);
+
+  loadTaskDataFromEEPROM();
+  updateTaskCompletedCount();
 
   initButtons();
   initOled();
@@ -104,6 +108,41 @@ void initOled() {
   }
 }
 
+void setDefaultTask(uint8_t index, const char* title, bool completed) {
+  if (index >= TASK_COUNT) {
+    return;
+  }
+
+  strncpy(taskData.tasks[index].title, title, TITLE_TEXT_LENGTH - 1);
+  taskData.tasks[index].title[TITLE_TEXT_LENGTH - 1] = '\0';
+  taskData.tasks[index].completed = completed;
+}
+
+void loadTaskDataFromEEPROM() {
+  EEPROM.get(EEPROM_START_ADDR, taskData);
+
+  if (taskData.magicKey != EEPROM_MAGIC_KEY) {
+    taskData.magicKey = EEPROM_MAGIC_KEY;
+
+    setDefaultTask(0, "Pray Fajr", false);
+    setDefaultTask(1, "Take Walk", false);
+    setDefaultTask(2, "Pray Dhuhr", false);
+    setDefaultTask(3, "Take Nap", false);
+    setDefaultTask(4, "Pray Asr", false);
+    setDefaultTask(5, "Exercise", false);
+    setDefaultTask(6, "Pray Magrib", false);
+    setDefaultTask(7, "Do Homework", false);
+    setDefaultTask(8, "Pray Isha", false);
+    setDefaultTask(9, "Read Quran", false);
+
+    saveTaskDataToEEPROM();
+  }
+}
+
+void saveTaskDataToEEPROM() {
+  EEPROM.put(EEPROM_START_ADDR, taskData);
+}
+
 void handleButtonInputs() {
   if (digitalRead(BUTTON_PINS[0]) == LOW) {
     if (selectedTaskIndex > 0) {
@@ -111,8 +150,9 @@ void handleButtonInputs() {
     }
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[1]) == LOW) {
-    tasks[selectedTaskIndex].toggle();
+    taskData.tasks[selectedTaskIndex].toggle();
     updateTaskCompletedCount();
+    saveTaskDataToEEPROM();
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[2]) == LOW) {
     if (selectedTaskIndex < TASK_COUNT - 1) {
@@ -126,7 +166,7 @@ void updateTaskCompletedCount() {
   uint8_t count = 0;
 
   for (uint8_t i = 0; i < TASK_COUNT; i++) {
-    if (tasks[i].completed) {
+    if (taskData.tasks[i].completed) {
       count++;
     }
   }
@@ -181,7 +221,7 @@ void renderTaskList(uint8_t scrollStartIndex) {
       break;
     }
 
-    const TodoItem& task = tasks[taskIndex];
+    const Task& task = taskData.tasks[taskIndex];
     uint8_t rowTopY = TITLE_BAR_HEIGHT + MARGIN + (CHAR_HEIGHT * i * 2);
 
     char lineBuffer[TITLE_TEXT_LENGTH + 6];
