@@ -18,8 +18,10 @@ const int8_t BUTTON_PINS[BUTTON_COUNT] = { 6, 5, 4 };
 Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, DISPLAY_RESET_PIN);
 
 bool isDisplayReady = false;
+bool needsRedraw = false;
 
-const uint8_t LOOP_DELAY_MS = 100;
+uint32_t lastInputCheckMs = 0;
+const uint8_t INPUT_INTERVAL_MS = 100;
 
 struct TodoItem {
   char title[12];
@@ -65,10 +67,16 @@ void setup() {
 }
 
 void loop() {
-  handleButtonInputs();
-  renderDisplay();
+  uint32_t nowMs = millis();
+  if (nowMs - lastInputCheckMs >= INPUT_INTERVAL_MS) {
+    lastInputCheckMs = nowMs;
+    handleButtonInputs();
+  }
 
-  delay(LOOP_DELAY_MS);
+  if (needsRedraw) {
+    renderDisplay();
+    needsRedraw = false;
+  }
 }
 
 void initOled() {
@@ -83,11 +91,14 @@ void initOled() {
 void handleButtonInputs() {
   if (digitalRead(BUTTON_PINS[0]) == LOW) {
     if (selectedTaskIndex > 0) selectedTaskIndex--;
+    needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[1]) == LOW) {
     TodoItem &item = tasks[selectedTaskIndex];
     item.toggle();
+    needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[2]) == LOW) {
     if (selectedTaskIndex < TASK_COUNT - 1) selectedTaskIndex++;
+    needsRedraw = true;
   }
 }
 
