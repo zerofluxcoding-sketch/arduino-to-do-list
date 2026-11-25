@@ -57,8 +57,8 @@ void initOled();
 void handleButtonInputs();
 void renderDisplay();
 void updateTaskCompletedCount();
-void printCenteredText(const __FlashStringHelper* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY);
-void printCenteredText(char* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY);
+void printCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
+void printCenteredText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY);
 
 void setup() {
   Wire.begin();
@@ -119,7 +119,6 @@ void renderDisplay() {
 
   display.drawRect(0, 0, DISPLAY_WIDTH, TITLE_BAR_HEIGHT, SSD1306_WHITE);
   display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
-  display.drawRect(0, TITLE_BAR_HEIGHT, DISPLAY_WIDTH, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
   display.drawFastVLine(DISPLAY_WIDTH - SUMMERY_BAR_WIDTH - 1, TITLE_BAR_HEIGHT, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
   display.drawFastVLine(DISPLAY_WIDTH - SUMMERY_BAR_WIDTH, TITLE_BAR_HEIGHT, DISPLAY_HEIGHT - TITLE_BAR_HEIGHT, SSD1306_WHITE);
 
@@ -161,37 +160,30 @@ void updateTaskCompletedCount() {
   taskCompletedCount = newCount;
 }
 
-void printCenteredText(const __FlashStringHelper* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY) {
-  uint8_t textLength = strlen_P((PGM_P)label);
-  uint8_t cursorY, cursorX;
-
-  if (alignCenterX) {
-    cursorX = (areaWidth - (CHAR_WIDTH * textSize * textLength)) / 2;
-  } else if (!alignCenterX) {
-    cursorX = areaWidth;
-  }
-
-  if (alignCenterY) {
-    cursorY = (boxTopY - (CHAR_HEIGHT * textSize)) / 2;
-  } else if (!alignCenterX) {
-    cursorY = boxTopY;
-  }
-
-  display.setTextSize(textSize);
-  display.setCursor(cursorX, cursorY);
-  display.println(label);
-}
-
-void printCenteredText(char* label, uint8_t textSize, uint8_t areaWidth, uint8_t boxTopY, bool alignCenterX, bool alignCenterY) {
-  uint8_t textLength = strlen(label);
+void printCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
+  uint8_t textLength = strlen_P((PGM_P)text);
 
   uint8_t cursorX = alignCenterX ?
-    (areaWidth - (CHAR_WIDTH * textSize * textLength)) / 2 : areaWidth;
+    (width - (CHAR_WIDTH * textSize * textLength)) / 2 : width;
 
   uint8_t cursorY = alignCenterY ?
-    (boxTopY - (CHAR_HEIGHT * textSize)) / 2 : boxTopY;
+    (height - (CHAR_HEIGHT * textSize)) / 2 : height;
 
   display.setTextSize(textSize);
   display.setCursor(cursorX, cursorY);
-  display.println(label);
+  display.println(text);
+}
+
+void printCenteredText(char* text, uint8_t textSize, uint8_t width, uint8_t height, bool alignCenterX, bool alignCenterY) {
+  uint8_t textLength = strlen(text);
+
+  uint8_t cursorX = alignCenterX ?
+    (width - (CHAR_WIDTH * textSize * textLength)) / 2 : width;
+
+  uint8_t cursorY = alignCenterY ?
+    (height - (CHAR_HEIGHT * textSize)) / 2 : height;
+
+  display.setTextSize(textSize);
+  display.setCursor(cursorX, cursorY);
+  display.println(text);
 }
