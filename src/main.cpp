@@ -50,6 +50,8 @@ const uint8_t MAX_ITEM_DISPLAY = 3;
 void initOled();
 void handleButtonInputs();
 void renderDisplay();
+void printCenteredText(const __FlashStringHelper* flashText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically);
+void printCenteredText(char* ramText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically);
 
 void setup() {
   Wire.begin();
@@ -95,7 +97,7 @@ void renderDisplay() {
   display.clearDisplay();
 
   display.setCursor(0, 0);
-  display.println(F("To-Do List"));
+  printCenteredText(F("To-Do List"), 1, SCREEN_WIDTH, HEADER_HEIGHT, true, true);
 
   int8_t targetIndex = todoListIndex - 1;
   if (targetIndex < MAX_ITEM_DISPLAY - 2) {
@@ -108,8 +110,7 @@ void renderDisplay() {
     TodoItem item = todoList[targetIndex + i];
 
     uint8_t yOffset = HEADER_HEIGHT + 10 * i;
-    display.setCursor(0, yOffset);
-    display.println(item.itemName);
+    printCenteredText(item.itemName, 1, SCREEN_WIDTH, yOffset, true, false);
 
     if (targetIndex + i == todoListIndex) {
       display.drawRect(0, yOffset, SCREEN_WIDTH, 10, SSD1306_WHITE);
@@ -121,4 +122,39 @@ void renderDisplay() {
   }
 
   display.display();
+}
+
+void printCenteredText(const __FlashStringHelper* flashText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically) {
+  uint8_t textLength = strlen_P((PGM_P)flashText);
+  uint8_t heightPaddingUp, widthPaddingLeft;
+
+  if (centerHorizontally) {
+    widthPaddingLeft = (relativeWidth - (TEXT_WIDTH * textSize * textLength)) / 2;
+  } else if (!centerHorizontally) {
+    widthPaddingLeft = relativeWidth;
+  }
+
+  if (centerVertically) {
+    heightPaddingUp = (relativeHeight - (TEXT_HEIGHT * textSize)) / 2;
+  } else if (!centerHorizontally) {
+    heightPaddingUp = relativeHeight;
+  }
+
+  display.setTextSize(textSize);
+  display.setCursor(widthPaddingLeft, heightPaddingUp);
+  display.println(flashText);
+}
+
+void printCenteredText(char* ramText, uint8_t textSize, uint8_t relativeWidth, uint8_t relativeHeight, bool centerHorizontally, bool centerVertically) {
+  uint8_t textLength = strlen(ramText);
+
+  uint8_t widthPaddingLeft = centerHorizontally ?
+    (relativeWidth - (TEXT_WIDTH * textSize * textLength)) / 2 : relativeWidth;
+
+   uint8_t heightPaddingUp = centerVertically ?
+    (relativeHeight - (TEXT_HEIGHT * textSize)) / 2 : relativeHeight;
+
+  display.setTextSize(textSize);
+  display.setCursor(widthPaddingLeft, heightPaddingUp);
+  display.println(ramText);
 }
