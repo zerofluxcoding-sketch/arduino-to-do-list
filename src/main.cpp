@@ -4,7 +4,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-const uint8_t EEPROM_MAGIC_KEY = 0x01;
+const uint8_t EEPROM_MAGIC_KEY = 0x05;
 const uint16_t EEPROM_START_ADDR = 0;
 
 const uint8_t OLED_I2C_ADDR = 0x3C;
@@ -22,7 +22,12 @@ const uint8_t BUTTON_COUNT = 3;
 const int8_t BUTTON_PINS[BUTTON_COUNT] = { 6, 5, 4 };
 
 const uint32_t WIRE_TIMEOUT_MS = 3000;
-const uint8_t INPUT_INTERVAL_MS = 133;
+const uint8_t INPUT_INTERVAL_MS = 200;
+
+const uint8_t BUZZER_PIN = 12;
+
+const uint16_t INTERACTION_HZ = 2000;
+const uint8_t BUZZER_DURATION = 180;  // 90% of INPUT_INTERVAL_MS
 
 const uint8_t TITLE_TEXT_LENGTH = 16;
 const uint8_t TASK_COUNT = 10;
@@ -67,6 +72,7 @@ void renderSummaryBar();
 void drawCenteredText(const __FlashStringHelper* text, uint8_t textSize, uint8_t boxX, uint8_t boxY, uint8_t boxWidth, uint8_t boxHeight);
 void drawCenteredText(const char* text, uint8_t textSize, uint8_t boxX, uint8_t boxY, uint8_t boxWidth, uint8_t boxHeight);
 void drawTextAt(const char* text, uint8_t textSize, uint8_t x, uint8_t y);
+void playInteractionSound();
 
 void setup() {
   Wire.begin();
@@ -75,6 +81,7 @@ void setup() {
   loadTaskDataFromEEPROM();
   updateTaskCompletedCount();
 
+  pinMode(BUZZER_PIN, OUTPUT);
   initButtons();
   initOled();
 }
@@ -145,16 +152,19 @@ void saveTaskDataToEEPROM() {
 
 void handleButtonInputs() {
   if (digitalRead(BUTTON_PINS[0]) == LOW) {
+    playInteractionSound();
     if (selectedTaskIndex > 0) {
       selectedTaskIndex--;
     }
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[1]) == LOW) {
+    playInteractionSound();
     taskData.tasks[selectedTaskIndex].toggle();
     updateTaskCompletedCount();
     saveTaskDataToEEPROM();
     needsRedraw = true;
   } else if (digitalRead(BUTTON_PINS[2]) == LOW) {
+    playInteractionSound();
     if (selectedTaskIndex < TASK_COUNT - 1) {
       selectedTaskIndex++;
     }
@@ -279,4 +289,8 @@ void drawTextAt(const char* text, uint8_t textSize, uint8_t x, uint8_t y) {
   display.setTextSize(textSize);
   display.setCursor(x, y);
   display.print(text);
+}
+
+void playInteractionSound() {
+  tone(BUZZER_PIN, INTERACTION_HZ, BUZZER_DURATION);
 }
